@@ -3508,8 +3508,13 @@
             station.toolSnapshot = null;
             if (changed) station.verified = false;
             if (selectedTool) {
-                if (!station.holder) station.holder = selectedTool.holder || '';
-                if (!station.cutter) station.cutter = selectedTool.cutter || '';
+                station.holder = selectedTool.holder || '';
+                station.cutter = selectedTool.cutter || '';
+                station.notes = selectedTool.notes || '';
+            } else {
+                station.holder = '';
+                station.cutter = '';
+                station.notes = '';
             }
             touchEcasSetup(setup);
             renderSetups();
@@ -3828,7 +3833,7 @@
             }
 
             if (currentSetupStep === 3) {
-                return `<div class="setup-callout"><strong>Machine-side station check.</strong> ECAS-20 defaults to all 24 physical stations. Change the available count for this setup when needed.</div>
+                return `<div class="setup-callout"><strong>Machine-side station check.</strong> Selecting a library tool refreshes the holder, cutter/insert, and saved tool notes in that station. ECAS-20 defaults to all 24 physical stations.</div>
                     <div class="setup-panel" style="margin-bottom:0.75rem;">
                         <div class="setup-field-grid">
                             <div class="setup-field"><label>AVAILABLE STATIONS</label><input type="number" min="1" max="24" step="1" value="${setup.availableStationCount}" onchange="updateEcasStationCount(this.value)"></div>
