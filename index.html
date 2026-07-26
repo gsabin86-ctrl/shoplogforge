@@ -4249,6 +4249,23 @@
             await saveExportBlob(`shoplog-backup-${localDateKey()}.json`, blob);
         }
 
+        function mergeImportedRecords(currentRecords, importedRecords) {
+            if (!Array.isArray(importedRecords)) return currentRecords;
+            const merged = new Map();
+            importedRecords.forEach(record => {
+                if (record && record.id !== undefined && record.id !== null) {
+                    merged.set(String(record.id), record);
+                }
+            });
+            currentRecords.forEach(record => {
+                if (record && record.id !== undefined && record.id !== null) {
+                    // Keep the current device's version when the same record exists in both.
+                    merged.set(String(record.id), record);
+                }
+            });
+            return [...merged.values()];
+        }
+
         function showImportModal() {
             const input = document.createElement('input');
             input.type = 'file';
@@ -4262,16 +4279,25 @@
                     try {
                         const data = JSON.parse(ev.target.result);
                         
-                        if (data.machines) machines = data.machines;
-                        if (data.productionLogs) productionLogs = data.productionLogs;
-                        if (data.orders) orders = data.orders;
-                        if (data.downtimeEvents) downtimeEvents = data.downtimeEvents;
-                        if (data.toolLibrary) toolLibrary = normalizeToolLibrary(data.toolLibrary);
-                        if (data.machineSetups) machineSetups = data.machineSetups.map(normalizeEcasSetup);
-                        activeDowntime = data.activeDowntime || null;
+                        machines = mergeImportedRecords(machines, data.machines);
+                        productionLogs = mergeImportedRecords(productionLogs, data.productionLogs);
+                        orders = mergeImportedRecords(orders, data.orders);
+                        downtimeEvents = mergeImportedRecords(downtimeEvents, data.downtimeEvents);
+                        if (Array.isArray(data.toolLibrary)) {
+                            toolLibrary = normalizeToolLibrary(
+                                mergeImportedRecords(toolLibrary, data.toolLibrary)
+                            );
+                        }
+                        if (Array.isArray(data.machineSetups)) {
+                            machineSetups = mergeImportedRecords(
+                                machineSetups,
+                                data.machineSetups.map(normalizeEcasSetup)
+                            ).map(normalizeEcasSetup);
+                        }
+                        activeDowntime = activeDowntime || data.activeDowntime || null;
                         
                         saveToLocalStorage();
-                        location.reload(); // Refresh everything
+                        location.reload();
                     } catch (err) {
                         alert("Invalid backup file");
                     }
