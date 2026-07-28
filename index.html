@@ -3755,7 +3755,7 @@
                 ${setup.job.notes ? `<div class="setup-callout" style="margin-top:0.75rem;margin-bottom:0;"><strong>Setup notes:</strong> ${escapeHtml(setup.job.notes)}</div>` : ''}
                 <div class="setup-list-actions">
                     <button class="btn btn-primary btn-sm" onclick="openEcasSetup(${JSON.stringify(setup.id)})"><i class="fa-solid fa-pen"></i> ${setup.status === 'Complete' ? 'REOPEN & EDIT' : 'EDIT'}</button>
-                    <button class="btn btn-ghost btn-sm" onclick="exportActiveEcasSetup(${JSON.stringify(setup.id)})"><i class="fa-solid fa-download"></i> EXPORT</button>
+                    <button class="btn btn-ghost btn-sm" onclick="exportActiveEcasSetup(${JSON.stringify(setup.id)})"><i class="fa-solid fa-download"></i> WORD</button>
                     <button class="btn btn-ghost btn-sm" onclick="printEcasSetup(${JSON.stringify(setup.id)})"><i class="fa-solid fa-print"></i> PRINT</button>
                     <button class="btn btn-ghost btn-sm" onclick="deleteEcasSetup(${JSON.stringify(setup.id)})"><i class="fa-solid fa-trash"></i> DELETE</button>
                 </div>
@@ -3873,24 +3873,311 @@
                     </div>`).join('') : `<div class="setup-callout" style="margin:0;"><strong>No tools are assigned yet.</strong> Return to Stations and pull tools from the library.</div>`}
                 </div>
                 <div class="setup-actions">
-                    <button class="btn btn-ghost btn-lg" onclick="exportActiveEcasSetup()"><i class="fa-solid fa-download"></i> EXPORT SETUP</button>
+                    <button class="btn btn-ghost btn-lg" onclick="exportActiveEcasSetup()"><i class="fa-solid fa-download"></i> EXPORT WORD</button>
                     <button class="btn btn-primary btn-lg" onclick="printEcasSetup()"><i class="fa-solid fa-print"></i> PRINT</button>
                 </div>`;
+        }
+
+        function escapeWordXml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function wordRunXml(value, options = {}) {
+            const size = Number(options.size || 18);
+            const color = options.color || '111827';
+            const bold = options.bold ? '<w:b/><w:bCs/>' : '';
+            const italic = options.italic ? '<w:i/><w:iCs/>' : '';
+            return `<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/><w:color w:val="${color}"/>${bold}${italic}</w:rPr><w:t xml:space="preserve">${escapeWordXml(value)}</w:t></w:r>`;
+        }
+
+        function wordParagraphXml(value, options = {}) {
+            const before = Number(options.before || 0);
+            const after = Number(options.after ?? 40);
+            const line = Number(options.line || 240);
+            const align = options.align ? `<w:jc w:val="${options.align}"/>` : '';
+            const keepNext = options.keepNext ? '<w:keepNext/>' : '';
+            return `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="auto"/>${align}${keepNext}</w:pPr>${wordRunXml(value, options)}</w:p>`;
+        }
+
+        function wordTableCellXml(value, width, options = {}) {
+            const fill = options.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${options.fill}"/>` : '';
+            const gridSpan = options.gridSpan ? `<w:gridSpan w:val="${options.gridSpan}"/>` : '';
+            return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${gridSpan}<w:vAlign w:val="center"/>${fill}</w:tcPr>${wordParagraphXml(value, {
+                size:options.size || 16,
+                bold:options.bold,
+                italic:options.italic,
+                color:options.color || '111827',
+                align:options.align,
+                before:0,
+                after:0,
+                line:220
+            })}</w:tc>`;
+        }
+
+        function wordTableXml(widths, rows, options = {}) {
+            const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+            const borderColor = options.borderColor || 'AAB2BD';
+            const grid = widths.map(width => `<w:gridCol w:w="${width}"/>`).join('');
+            const body = rows.map(row => {
+                const cells = row.cells.map(cell => wordTableCellXml(cell.value, cell.width, cell)).join('');
+                return `<w:tr>${row.header ? '<w:trPr><w:tblHeader/></w:trPr>' : ''}${cells}</w:tr>`;
+            }).join('');
+            return `<w:tbl><w:tblPr><w:tblW w:w="${totalWidth}" w:type="dxa"/><w:tblInd w:w="120" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="${borderColor}"/><w:left w:val="single" w:sz="6" w:space="0" w:color="${borderColor}"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="${borderColor}"/><w:right w:val="single" w:sz="6" w:space="0" w:color="${borderColor}"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="D7DCE2"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="D7DCE2"/></w:tblBorders><w:tblCellMar><w:top w:w="70" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="70" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${body}</w:tbl>`;
+        }
+
+        function buildEcasSetupDocumentXml(setup, machine) {
+            const availableStations = getAvailableEcasStations(setup);
+            const machineName = machine ? [machine.name, machine.model].filter(Boolean).join(' · ') : setup.machineModel || 'ECAS-20';
+            const documentWidth = 14736;
+            const metaWidths = [1200, 6168, 1200, 6168];
+            const metaRows = [
+                {
+                    cells:[
+                        { value:'PART NUMBER', width:metaWidths[0], fill:'DCEAF7', bold:true, color:'1F4D78' },
+                        { value:setup.job.partNumber || '', width:metaWidths[1], bold:true, size:19 },
+                        { value:'PROGRAM', width:metaWidths[2], fill:'DCEAF7', bold:true, color:'1F4D78' },
+                        { value:setup.job.program || '', width:metaWidths[3], bold:true, size:19 }
+                    ]
+                },
+                {
+                    cells:[
+                        { value:'WORK ORDER', width:metaWidths[0], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.job.workOrder || '', width:metaWidths[1] },
+                        { value:'STATUS', width:metaWidths[2], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.status || '', width:metaWidths[3] }
+                    ]
+                },
+                {
+                    cells:[
+                        { value:'MACHINE', width:metaWidths[0], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:machineName, width:metaWidths[1] },
+                        { value:'DATE', width:metaWidths[2], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.job.date || '', width:metaWidths[3] }
+                    ]
+                },
+                {
+                    cells:[
+                        { value:'OPERATOR', width:metaWidths[0], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.job.operator || '', width:metaWidths[1] },
+                        { value:'REVISION', width:metaWidths[2], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.job.revision || '', width:metaWidths[3] }
+                    ]
+                },
+                {
+                    cells:[
+                        { value:'DESCRIPTION', width:metaWidths[0], fill:'E8EEF5', bold:true, color:'1F4D78' },
+                        { value:setup.job.description || '', width:documentWidth - metaWidths[0], gridSpan:3 }
+                    ]
+                }
+            ];
+            const hardwareRows = [
+                ['BAR STOCK', setup.job.barStock, 'MATERIAL', setup.job.material],
+                ['MAIN COLLET', setup.job.mainCollet, 'GUIDE BUSHING', setup.job.guideBushing],
+                ['SUB COLLET', setup.job.subCollet, 'KNOCKOUT', setup.job.knockout],
+                ['CUTTING OIL', setup.job.cuttingOil, 'CYCLE TIME', setup.job.cycleTime]
+            ].map(values => ({
+                cells:[
+                    { value:values[0], width:metaWidths[0], fill:'F2F4F7', bold:true, color:'374151' },
+                    { value:values[1] || '', width:metaWidths[1] },
+                    { value:values[2], width:metaWidths[2], fill:'F2F4F7', bold:true, color:'374151' },
+                    { value:values[3] || '', width:metaWidths[3] }
+                ]
+            }));
+            const stationWidths = [800, 850, 2200, 2100, 2300, 700, 850, 4936];
+            const stationRows = [{
+                header:true,
+                cells:[
+                    { value:'STATION', width:stationWidths[0], fill:'1F4D78', bold:true, color:'FFFFFF', align:'center' },
+                    { value:'T-CODE', width:stationWidths[1], fill:'1F4D78', bold:true, color:'FFFFFF', align:'center' },
+                    { value:'OPERATION', width:stationWidths[2], fill:'1F4D78', bold:true, color:'FFFFFF' },
+                    { value:'HOLDER', width:stationWidths[3], fill:'1F4D78', bold:true, color:'FFFFFF' },
+                    { value:'CUTTER / INSERT', width:stationWidths[4], fill:'1F4D78', bold:true, color:'FFFFFF' },
+                    { value:'OFFSET', width:stationWidths[5], fill:'1F4D78', bold:true, color:'FFFFFF', align:'center' },
+                    { value:'VERIFIED', width:stationWidths[6], fill:'1F4D78', bold:true, color:'FFFFFF', align:'center' },
+                    { value:'STATION NOTES', width:stationWidths[7], fill:'1F4D78', bold:true, color:'FFFFFF' }
+                ]
+            }];
+            availableStations.forEach((station, index) => {
+                const tool = getEcasStationTool(setup, station);
+                const fill = index % 2 ? 'F7F9FB' : 'FFFFFF';
+                stationRows.push({
+                    cells:[
+                        { value:station.id, width:stationWidths[0], fill, bold:true, color:'1F4D78', align:'center' },
+                        { value:tool ? tool.legacyTool || '' : '', width:stationWidths[1], fill, align:'center' },
+                        { value:tool ? tool.operation || '' : '', width:stationWidths[2], fill },
+                        { value:station.holder || (tool ? tool.holder : '') || '', width:stationWidths[3], fill },
+                        { value:station.cutter || (tool ? tool.cutter : '') || '', width:stationWidths[4], fill },
+                        { value:tool ? tool.offset || '' : '', width:stationWidths[5], fill, align:'center' },
+                        { value:tool ? (station.verified ? 'YES' : 'NO') : '', width:stationWidths[6], fill, bold:Boolean(tool), color:station.verified ? '166534' : '991B1B', align:'center' },
+                        { value:station.notes || (tool ? tool.notes : '') || '', width:stationWidths[7], fill }
+                    ]
+                });
+            });
+            const notesTable = wordTableXml([documentWidth], [{
+                cells:[{
+                    value:setup.job.notes || 'No general setup notes entered.',
+                    width:documentWidth,
+                    fill:'F4F6F9',
+                    size:17,
+                    color:setup.job.notes ? '111827' : '6B7280',
+                    italic:!setup.job.notes
+                }]
+            }], { borderColor:'C7CED6' });
+            return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    ${wordParagraphXml('SHOPLOG · PRODUCTION + SETUPS', { size:17, bold:true, color:'2E74B5', after:30, keepNext:true })}
+    ${wordParagraphXml('ECAS-20 MACHINE SETUP', { size:38, bold:true, color:'111827', after:30, keepNext:true })}
+    ${wordParagraphXml(`${setup.job.partNumber || 'UNASSIGNED PART'} · PROGRAM ${setup.job.program || '—'} · ${setup.availableStationCount} ACTIVE STATIONS`, { size:20, bold:true, color:'4B5563', after:100, keepNext:true })}
+    ${wordTableXml(metaWidths, metaRows)}
+    ${wordParagraphXml('MACHINE HARDWARE', { size:21, bold:true, color:'2E74B5', before:100, after:50, keepNext:true })}
+    ${wordTableXml(metaWidths, hardwareRows)}
+    ${wordParagraphXml('TOOL STATIONS', { size:21, bold:true, color:'2E74B5', before:100, after:50, keepNext:true })}
+    ${wordTableXml(stationWidths, stationRows)}
+    ${wordParagraphXml('GENERAL SETUP NOTES', { size:21, bold:true, color:'2E74B5', before:100, after:50, keepNext:true })}
+    ${notesTable}
+    ${wordParagraphXml(`Exported from ShopLog ${new Date().toLocaleString()} · ${setup.status || 'Draft'} setup`, { size:14, color:'6B7280', align:'right', before:70, after:0 })}
+    <w:sectPr>
+      <w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>
+      <w:pgMar w:top="432" w:right="432" w:bottom="432" w:left="432" w:header="240" w:footer="240" w:gutter="0"/>
+      <w:cols w:space="720"/>
+      <w:docGrid w:linePitch="240"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+        }
+
+        function shoplogCrc32(bytes) {
+            let crc = -1;
+            for (let index = 0; index < bytes.length; index++) {
+                crc ^= bytes[index];
+                for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+            }
+            return (crc ^ -1) >>> 0;
+        }
+
+        function pushZipWord(target, value) {
+            target.push(value & 255, (value >>> 8) & 255);
+        }
+
+        function pushZipDword(target, value) {
+            target.push(value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255);
+        }
+
+        function pushZipBytes(target, bytes) {
+            for (let index = 0; index < bytes.length; index++) target.push(bytes[index]);
+        }
+
+        function createStoreZip(entries) {
+            const encoder = new TextEncoder();
+            const output = [];
+            const directory = [];
+            const now = new Date();
+            const year = Math.max(1980, now.getFullYear());
+            const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+            const dosDate = ((year - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+            entries.forEach(entry => {
+                const name = encoder.encode(entry.name);
+                const data = typeof entry.data === 'string' ? encoder.encode(entry.data) : entry.data;
+                const crc = shoplogCrc32(data);
+                const offset = output.length;
+                pushZipDword(output, 0x04034B50);
+                pushZipWord(output, 20);
+                pushZipWord(output, 0x0800);
+                pushZipWord(output, 0);
+                pushZipWord(output, dosTime);
+                pushZipWord(output, dosDate);
+                pushZipDword(output, crc);
+                pushZipDword(output, data.length);
+                pushZipDword(output, data.length);
+                pushZipWord(output, name.length);
+                pushZipWord(output, 0);
+                pushZipBytes(output, name);
+                pushZipBytes(output, data);
+                directory.push({ name, crc, size:data.length, offset });
+            });
+            const directoryOffset = output.length;
+            directory.forEach(entry => {
+                pushZipDword(output, 0x02014B50);
+                pushZipWord(output, 20);
+                pushZipWord(output, 20);
+                pushZipWord(output, 0x0800);
+                pushZipWord(output, 0);
+                pushZipWord(output, dosTime);
+                pushZipWord(output, dosDate);
+                pushZipDword(output, entry.crc);
+                pushZipDword(output, entry.size);
+                pushZipDword(output, entry.size);
+                pushZipWord(output, entry.name.length);
+                pushZipWord(output, 0);
+                pushZipWord(output, 0);
+                pushZipWord(output, 0);
+                pushZipWord(output, 0);
+                pushZipDword(output, 0);
+                pushZipDword(output, entry.offset);
+                pushZipBytes(output, entry.name);
+            });
+            const directorySize = output.length - directoryOffset;
+            pushZipDword(output, 0x06054B50);
+            pushZipWord(output, 0);
+            pushZipWord(output, 0);
+            pushZipWord(output, directory.length);
+            pushZipWord(output, directory.length);
+            pushZipDword(output, directorySize);
+            pushZipDword(output, directoryOffset);
+            pushZipWord(output, 0);
+            return new Uint8Array(output);
+        }
+
+        function buildEcasSetupDocx(setup, machine) {
+            const documentXml = buildEcasSetupDocumentXml(setup, machine);
+            const exportedAt = new Date().toISOString();
+            const entries = [
+                {
+                    name:'[Content_Types].xml',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`
+                },
+                {
+                    name:'_rels/.rels',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`
+                },
+                {
+                    name:'word/_rels/document.xml.rels',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`
+                },
+                {
+                    name:'word/styles.xml',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="111827"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:before="0" w:after="80" w:line="300" w:lineRule="auto"/></w:pPr><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:style></w:styles>`
+                },
+                { name:'word/document.xml', data:documentXml },
+                {
+                    name:'docProps/core.xml',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${escapeWordXml(`ECAS-20 Setup ${setup.job.partNumber || ''}`)}</dc:title><dc:subject>ShopLog machine setup export</dc:subject><dc:creator>ShopLog</dc:creator><cp:lastModifiedBy>ShopLog</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${exportedAt}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${exportedAt}</dcterms:modified></cp:coreProperties>`
+                },
+                {
+                    name:'docProps/app.xml',
+                    data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>ShopLog</Application><AppVersion>1.3</AppVersion><Company>TEXAS SWISS</Company></Properties>`
+                }
+            ];
+            return new Blob([createStoreZip(entries)], {
+                type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
         }
 
         async function exportActiveEcasSetup(id = activeSetupId) {
             const rawSetup = machineSetups.find(item => String(item.id) === String(id));
             const setup = rawSetup ? normalizeEcasSetup(rawSetup) : null;
             if (!setup) return;
-            const stationAssignments = getAssignedEcasStations(setup).map(({ station, tool }) => ({
-                ...station,
-                tool:snapshotEcasTool(tool)
-            }));
-            const payload = JSON.stringify({ setup, stationAssignments, exportedAt:new Date().toISOString(), version:'A1.3' }, null, 2);
+            const machine = machines.find(item => String(item.id) === String(setup.machineId));
             const safePart = String(setup.job.partNumber || 'ECAS20').replace(/[^a-z0-9_-]+/gi,'-');
             const safeProgram = String(setup.job.program || 'setup').replace(/[^a-z0-9_-]+/gi,'-');
-            const filename = `${safePart}-${safeProgram}-setup.json`;
-            await saveExportBlob(filename, new Blob([payload], { type:'application/json' }));
+            const filename = `${safePart}-${safeProgram}-ECAS20-setup.docx`;
+            await saveExportBlob(filename, buildEcasSetupDocx(setup, machine));
         }
 
         function printEcasSetup(id = activeSetupId) {
