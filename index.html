@@ -3495,13 +3495,6 @@
             if (!setup) return;
             const station = setup.stations.find(item => item.id === stationId);
             if (!station) return;
-            setup.stations.forEach(item => {
-                if (item.id !== stationId && toolId && String(item.toolId) === String(toolId)) {
-                    item.toolId = '';
-                    item.toolSnapshot = null;
-                    item.verified = false;
-                }
-            });
             const selectedTool = toolLibrary.find(tool => String(tool.id) === String(toolId));
             const changed = String(station.toolId || '') !== String(toolId || '');
             station.toolId = toolId || '';
