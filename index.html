@@ -979,6 +979,29 @@
         .setup-folder-state { min-width:0; }
         .setup-folder-state strong { display:block; color:var(--text2); font:700 0.68rem var(--font-mono); }
         .setup-folder-state span { display:block; margin-top:0.1rem; overflow:hidden; color:var(--text3); font:0.62rem var(--font-mono); text-overflow:ellipsis; white-space:nowrap; }
+        .setup-search-panel {
+            margin-bottom:0.85rem; padding:0.75rem;
+            background:var(--panel); border:1px solid var(--line); border-radius:0.875rem;
+        }
+        .setup-search-head {
+            margin-bottom:0.45rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
+        }
+        .setup-search-head label { color:var(--text2); font:700 0.68rem var(--font-mono); letter-spacing:0.07em; }
+        .setup-search-count { color:var(--cyan); font:700 0.62rem var(--font-mono); letter-spacing:0.04em; }
+        .setup-search-control { display:flex; align-items:stretch; gap:0.45rem; }
+        .setup-search-input-wrap { position:relative; flex:1; min-width:0; }
+        .setup-search-icon {
+            position:absolute; left:0.8rem; top:50%; transform:translateY(-50%);
+            color:var(--text3); font:700 1rem var(--font-mono); pointer-events:none;
+        }
+        .setup-search-input {
+            width:100%; min-height:44px; padding:0.72rem 0.8rem 0.72rem 2.2rem;
+            background:rgba(3,7,18,0.72); border:1px solid var(--line); border-radius:0.625rem;
+            color:var(--text1); font:0.82rem var(--font-mono); outline:none;
+        }
+        .setup-search-input::placeholder { color:var(--text3); }
+        .setup-search-input:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,229,255,0.1); }
+        .setup-search-clear { min-width:68px; }
         .setup-editor-head {
             margin-bottom:0.8rem; padding:0.85rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
             background:var(--panel2); border:1px solid var(--line); border-radius:0.875rem;
@@ -1495,6 +1518,22 @@
                     <span>CHOOSE FOLDER</span>
                 </button>
             </div>
+            <div id="setup-search-panel" class="setup-search-panel">
+                <div class="setup-search-head">
+                    <label for="setup-search-input">SEARCH SETUPS</label>
+                    <span id="setup-search-count" class="setup-search-count">0 SETUPS</span>
+                </div>
+                <div class="setup-search-control">
+                    <div class="setup-search-input-wrap">
+                        <span class="setup-search-icon" aria-hidden="true">⌕</span>
+                        <input id="setup-search-input" class="setup-search-input" type="search"
+                            placeholder="Part, program, work order, machine…"
+                            autocomplete="off" oninput="setSetupSearchQuery(this.value)">
+                    </div>
+                    <button id="setup-search-clear" type="button" class="btn btn-ghost btn-sm setup-search-clear"
+                        onclick="clearSetupSearch()" style="display:none;">CLEAR</button>
+                </div>
+            </div>
             <div id="setup-list" class="setup-list"></div>
             <div id="setup-editor" style="display:none;"></div>
         </div>
@@ -1733,6 +1772,7 @@
         let expandedSetupIds = new Set();
         let activeSetupId = null;
         let currentSetupStep = 1;
+        let setupSearchQuery = '';
         let exportDirectoryHandle = null;
 
         // New installs start empty. No fake machines, orders, or logs.
@@ -3614,6 +3654,53 @@
             });
         }
 
+        function getSetupSearchText(rawSetup) {
+            const setup = normalizeEcasSetup(rawSetup);
+            const machine = machines.find(item => String(item.id) === String(setup.machineId));
+            const assignedTools = getAssignedEcasStations(setup).flatMap(({ station, tool }) => [
+                station.id,
+                tool.legacyTool,
+                tool.operation,
+                station.holder || tool.holder,
+                station.cutter || tool.cutter
+            ]);
+            return [
+                setup.status,
+                setup.machineModel,
+                machine ? machine.name : '',
+                machine ? machine.model : '',
+                ...Object.values(setup.job || {}),
+                ...assignedTools
+            ].filter(value => value !== null && value !== undefined).join(' ').toLocaleLowerCase();
+        }
+
+        function getFilteredMachineSetups() {
+            const sorted = getSortedMachineSetups();
+            const tokens = String(setupSearchQuery || '')
+                .toLocaleLowerCase()
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean);
+            if (!tokens.length) return sorted;
+            return sorted.filter(setup => {
+                const searchText = getSetupSearchText(setup);
+                return tokens.every(token => searchText.includes(token));
+            });
+        }
+
+        function setSetupSearchQuery(value) {
+            setupSearchQuery = String(value || '');
+            renderSetups();
+        }
+
+        function clearSetupSearch() {
+            setupSearchQuery = '';
+            const input = document.getElementById('setup-search-input');
+            if (input) input.value = '';
+            renderSetups();
+            if (input) input.focus();
+        }
+
         function finishAndSaveEcasSetup() {
             const setup = currentEcasSetup();
             if (!setup) return;
@@ -3668,9 +3755,22 @@
             updateExportFolderLabel();
 
             const active = currentEcasSetup();
+            const searchPanel = document.getElementById('setup-search-panel');
+            if (searchPanel) searchPanel.style.display = active ? 'none' : 'block';
             if (!active) {
                 editor.style.display = 'none';
                 list.style.display = 'grid';
+                const filteredSetups = getFilteredMachineSetups();
+                const searchInput = document.getElementById('setup-search-input');
+                const searchCount = document.getElementById('setup-search-count');
+                const searchClear = document.getElementById('setup-search-clear');
+                if (searchInput && searchInput.value !== setupSearchQuery) searchInput.value = setupSearchQuery;
+                if (searchCount) {
+                    searchCount.textContent = setupSearchQuery.trim()
+                        ? `${filteredSetups.length} OF ${machineSetups.length} SETUPS`
+                        : `${machineSetups.length} SETUP${machineSetups.length === 1 ? '' : 'S'}`;
+                }
+                if (searchClear) searchClear.style.display = setupSearchQuery.trim() ? '' : 'none';
                 if (!machineSetups.length) {
                     list.innerHTML = `<div class="setup-empty">
                         <div style="font-size:1.6rem;color:var(--cyan);margin-bottom:0.4rem;"><i class="fa-solid fa-screwdriver-wrench"></i></div>
@@ -3679,7 +3779,16 @@
                     </div>`;
                     return;
                 }
-                list.innerHTML = getSortedMachineSetups().map(rawSetup => {
+                if (!filteredSetups.length) {
+                    list.innerHTML = `<div class="setup-empty">
+                        <div style="font-size:1.6rem;color:var(--cyan);margin-bottom:0.4rem;">⌕</div>
+                        <strong style="display:block;color:var(--text1);margin-bottom:0.3rem;">No matching setup sheets</strong>
+                        <span style="font-size:0.75rem;">Try a different part, program, work order, machine, or tool.</span>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="clearSetupSearch()" style="margin-top:0.8rem;">CLEAR SEARCH</button>
+                    </div>`;
+                    return;
+                }
+                list.innerHTML = filteredSetups.map(rawSetup => {
                     const setup = normalizeEcasSetup(rawSetup);
                     const progress = getEcasProgress(setup);
                     const machine = machines.find(item => String(item.id) === String(setup.machineId));
