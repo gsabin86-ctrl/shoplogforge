@@ -805,6 +805,11 @@
         }
         .history-qty-label { color: var(--text3); font-family: var(--font-mono); font-size: 0.55rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
         .history-qty-value { color: var(--text1); font-family: var(--font-mono); font-size: 1rem; font-weight: 800; margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-card-part {
+            margin-top:0.28rem; color:var(--cyan);
+            font:700 0.76rem var(--font-mono); letter-spacing:0.02em;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
         .icon-action {
             min-width: 2.25rem; height: 2.25rem;
             display: inline-flex; align-items: center; justify-content: center;
@@ -1470,6 +1475,24 @@
                         <i class="fa-solid fa-file-csv" style="font-size:0.65rem;"></i>
                         <span>CSV</span>
                     </button>
+                </div>
+            </div>
+
+            <div class="setup-search-panel">
+                <div class="setup-search-head">
+                    <label for="history-search-input">SEARCH HISTORY</label>
+                    <span id="history-search-count" class="setup-search-count" aria-live="polite">0 ENTRIES</span>
+                </div>
+                <div class="setup-search-control">
+                    <div class="setup-search-input-wrap">
+                        <span class="setup-search-icon" aria-hidden="true">⌕</span>
+                        <input id="history-search-input" class="setup-search-input" type="search"
+                            placeholder="Part number or work order"
+                            autocomplete="off" oninput="renderHistoryTable()"
+                            aria-label="Search production history by part number or work order">
+                    </div>
+                    <button id="history-search-clear" type="button" class="btn btn-ghost setup-search-clear"
+                        onclick="clearHistorySearch()" style="display:none;">CLEAR</button>
                 </div>
             </div>
 
@@ -2484,21 +2507,49 @@
             renderHistoryTable();
         }
 
-        function renderHistoryTable() {
-            const board = document.getElementById('history-table-body');
-            board.innerHTML = '';
-
-            const filterMachine = document.getElementById('history-filter-machine').value;
-
+        function getFilteredHistoryEntries(filterMachine = '', query = '') {
+            const searchTokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
             let filtered = [...productionLogs];
+
             if (filterMachine) {
-                filtered = filtered.filter(l => l.machineId == filterMachine);
+                filtered = filtered.filter(log => String(log.machineId) === String(filterMachine));
             }
 
-            filtered.sort((a, b) => dateFromKey(b.date) - dateFromKey(a.date));
+            if (searchTokens.length) {
+                filtered = filtered.filter(log => {
+                    const searchText = `${log.partNumber || ''} ${log.workOrder || ''}`.toLowerCase();
+                    return searchTokens.every(token => searchText.includes(token));
+                });
+            }
+
+            return filtered.sort((a, b) => dateFromKey(b.date) - dateFromKey(a.date));
+        }
+
+        function clearHistorySearch() {
+            const input = document.getElementById('history-search-input');
+            if (input) input.value = '';
+            renderHistoryTable();
+            if (input) input.focus();
+        }
+
+        function renderHistoryTable() {
+            const board = document.getElementById('history-table-body');
+            if (!board) return;
+            board.innerHTML = '';
+
+            const filterMachine = document.getElementById('history-filter-machine')?.value || '';
+            const searchInput = document.getElementById('history-search-input');
+            const searchQuery = searchInput?.value || '';
+            const filtered = getFilteredHistoryEntries(filterMachine, searchQuery);
+            const searchCount = document.getElementById('history-search-count');
+            const searchClear = document.getElementById('history-search-clear');
+            if (searchCount) searchCount.textContent = `${filtered.length} ${filtered.length === 1 ? 'ENTRY' : 'ENTRIES'}`;
+            if (searchClear) searchClear.style.display = searchQuery.trim() ? '' : 'none';
 
             if (filtered.length === 0) {
-                board.innerHTML = '<div class="cp-panel order-empty">No production entries found.</div>';
+                board.innerHTML = searchQuery.trim()
+                    ? '<div class="cp-panel order-empty">No matching production entries.<br><button type="button" class="btn btn-ghost btn-sm" style="margin-top:0.75rem;" onclick="clearHistorySearch()">CLEAR SEARCH</button></div>'
+                    : '<div class="cp-panel order-empty">No production entries found.</div>';
                 return;
             }
 
@@ -2520,6 +2571,7 @@
                                 <span class="order-title">${escapeHtml(log.workOrder || 'No WO')}</span>
                                 <span style="font-size:0.68rem;color:var(--text3);font-family:var(--font-mono);">${escapeHtml(log.date || '-')}</span>
                             </div>
+                            <div class="history-card-part">PART ${escapeHtml(log.partNumber || '—')}</div>
                             <div class="history-qty-grid">
                                 <div class="history-qty"><div class="history-qty-label">GOOD</div><div class="history-qty-value" style="color:var(--green);">${good.toLocaleString()}</div></div>
                                 <div class="history-qty"><div class="history-qty-label">SCRAP</div><div class="history-qty-value" style="color:${scrap > 0 ? 'var(--orange)' : 'var(--text1)'};">${scrap.toLocaleString()}</div></div>
