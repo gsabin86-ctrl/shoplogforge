@@ -100,8 +100,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     --java $build `
     --min-sdk-version 26 `
     --target-sdk-version 36 `
-    --version-code 1 `
-    --version-name "1.0" `
+    --version-code 2 `
+    --version-name "1.1" `
     -A $assets `
     $compiledResources `
     -o $unsignedApk

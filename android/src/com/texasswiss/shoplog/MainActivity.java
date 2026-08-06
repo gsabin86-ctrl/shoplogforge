@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -18,6 +20,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.io.File;
@@ -41,9 +44,30 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.rgb(3, 7, 18));
         getWindow().setNavigationBarColor(Color.rgb(3, 7, 18));
 
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(3, 7, 18));
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(3, 7, 18));
-        setContentView(webView);
+        root.addView(
+            webView,
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
+        setContentView(root);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets safeArea = insets.getInsets(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+                );
+                view.setPadding(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom);
+                return WindowInsets.CONSUMED;
+            });
+            root.requestApplyInsets();
+        }
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -241,4 +265,3 @@ public final class MainActivity extends Activity {
         return filename.toLowerCase(Locale.ROOT).equals(".") ? "shoplog-export.bin" : filename;
     }
 }
-
