@@ -1,5 +1,9 @@
 # ShopLog Forge
 
+<p align="center">
+  <img src="branding/ShopLog-Icon-1024.png" width="180" alt="ShopLog neon notebook logo">
+</p>
+
 [![iPhone build](https://github.com/gsabin86-ctrl/shoplogforge/actions/workflows/ios-build.yml/badge.svg)](https://github.com/gsabin86-ctrl/shoplogforge/actions/workflows/ios-build.yml)
 
 Cross-platform, phone-first production tracking and ECAS-20 machine setup
@@ -55,8 +59,8 @@ inside a permanent app installation so refreshes do not depend on temporary
 file-browser access. Android exports are written to `Downloads/ShopLog`, and
 JSON imports use the system file picker.
 
-The signed Android 1.1 installer is available at
-[`releases/ShopLog-Android-v1.1.apk`](releases/ShopLog-Android-v1.1.apk).
+The signed Android 1.2 installer is available at
+[`releases/ShopLog-Android-v1.2.apk`](releases/ShopLog-Android-v1.2.apk).
 Install it over an earlier ShopLog APK to retain the app's local data.
 
 The build requires Android Platform 36, Build Tools 36.0.0, and Java 17 or

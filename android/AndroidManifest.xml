@@ -7,8 +7,9 @@
         android:allowBackup="true"
         android:fullBackupContent="true"
         android:hardwareAccelerated="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@drawable/shoplog_logo"
         android:label="@string/app_name"
+        android:roundIcon="@drawable/shoplog_logo"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
