@@ -1,6 +1,24 @@
 # ShopLog Forge
 
-Phone-first production tracking and ECAS-20 machine setup sheets.
+[![iPhone build](https://github.com/gsabin86-ctrl/shoplogforge/actions/workflows/ios-build.yml/badge.svg)](https://github.com/gsabin86-ctrl/shoplogforge/actions/workflows/ios-build.yml)
+
+Cross-platform, phone-first production tracking and ECAS-20 machine setup
+sheets for Texas Swiss.
+
+## Project layout
+
+| Folder | Platform | Purpose |
+| --- | --- | --- |
+| `shared/` | All platforms | Canonical offline ShopLog interface and business logic |
+| `android/` | Android | Native WebView wrapper, Android storage bridge, and APK build |
+| `ios/` | iPhone | Native Swift/WKWebView wrapper and Xcode project definition |
+| `releases/` | Installers | Signed Android APK releases |
+| `index.html` | Browser | Standalone local/web version |
+
+Both mobile apps bundle the same ShopLog interface. Platform folders contain
+only the native code needed for installation, safe areas, local files, and
+operating-system integration. Each phone keeps its own local records; ShopLog's
+JSON export/import moves data between Android, iPhone, and browser versions.
 
 ## Run the app
 
@@ -19,7 +37,7 @@ Then open the local URL shown in the terminal.
 
 - Production, OEE, orders, machines, and downtime tracking
 - Permanent editable tool library
-- ECAS-20 setup sheets with 1–24 available stations
+- ECAS-20 setup sheets with 1-24 available stations
 - Tool assignments pulled from the master library
 - Expandable saved setup reviews
 - Completed setup sorting by part number and program number
@@ -43,3 +61,14 @@ Install it over an earlier ShopLog APK to retain the app's local data.
 
 The build requires Android Platform 36, Build Tools 36.0.0, and Java 17 or
 newer. Run `android/build.ps1` to create `android/build/ShopLog-Android.apk`.
+
+## iPhone app
+
+The `ios/` folder contains the Swift iPhone wrapper and an XcodeGen project
+definition. It stores ShopLog data locally, respects the notch/Dynamic Island
+and home indicator, exposes exports through the Files app, and opens external
+tool links in Safari.
+
+The final iPhone build and Apple signing step must run through Xcode on macOS.
+See [`ios/README.md`](ios/README.md) for generation, device installation, and
+distribution instructions.

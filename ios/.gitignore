@@ -1,0 +1,6 @@
+ShopLog.xcodeproj/
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+

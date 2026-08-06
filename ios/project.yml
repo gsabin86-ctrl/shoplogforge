@@ -1,0 +1,51 @@
+name: ShopLog
+
+options:
+  bundleIdPrefix: com.texasswiss
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+
+targets:
+  ShopLog:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: ShopLog
+        excludes:
+          - "Resources/**"
+          - "Info.plist"
+    resources:
+      - path: ShopLog/Resources
+    preBuildScripts:
+      - name: Sync shared ShopLog
+        script: |
+          cp "${SRCROOT}/../shared/shoplog.html" "${SRCROOT}/ShopLog/Resources/shoplog.html"
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.texasswiss.shoplog
+        PRODUCT_NAME: ShopLog
+        INFOPLIST_FILE: ShopLog/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  ShopLog:
+    build:
+      targets:
+        ShopLog: all
+    run:
+      config: Debug
+    archive:
+      config: Release

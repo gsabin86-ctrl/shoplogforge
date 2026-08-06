@@ -34,6 +34,7 @@ $build = Join-Path $project "build"
 $classes = Join-Path $build "classes"
 $dex = Join-Path $build "dex"
 $assets = Join-Path $project "assets"
+$sharedShopLog = [System.IO.Path]::GetFullPath((Join-Path $project "..\shared\shoplog.html"))
 $signing = Join-Path $project "signing"
 $keystore = Join-Path $signing "shoplog-release.jks"
 $properties = Join-Path $signing "keystore.properties"
@@ -58,6 +59,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $assets "shoplog.html"))) {
 }
 
 New-Item -ItemType Directory -Path $build,$classes,$dex,$signing -Force | Out-Null
+if (Test-Path -LiteralPath $sharedShopLog) {
+    Copy-Item -LiteralPath $sharedShopLog -Destination (Join-Path $assets "shoplog.html") -Force
+}
 
 if (-not (Test-Path -LiteralPath $properties)) {
     $password = [guid]::NewGuid().ToString("N")

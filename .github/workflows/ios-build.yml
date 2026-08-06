@@ -1,0 +1,39 @@
+name: iPhone build
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - ".github/workflows/ios-build.yml"
+  workflow_dispatch:
+
+jobs:
+  simulator-build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: ./generate-project.sh
+
+      - name: Build iPhone simulator app
+        run: >
+          xcodebuild
+          -project ios/ShopLog.xcodeproj
+          -scheme ShopLog
+          -configuration Debug
+          -destination "generic/platform=iOS Simulator"
+          CODE_SIGNING_ALLOWED=NO
+          build
+

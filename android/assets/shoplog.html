@@ -4655,29 +4655,46 @@
             URL.revokeObjectURL(url);
         }
 
-        async function saveExportBlobThroughAndroid(filename, blob) {
-            if (!window.ShopLogAndroid || typeof window.ShopLogAndroid.saveFile !== 'function') return false;
+        async function encodeExportBlob(blob) {
             const dataUrl = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(String(reader.result || ''));
                 reader.onerror = () => reject(reader.error || new Error('Could not prepare export'));
                 reader.readAsDataURL(blob);
             });
-            const base64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
-            window.ShopLogAndroid.saveFile(
-                String(filename || 'shoplog-export.bin'),
-                String(blob.type || 'application/octet-stream'),
-                base64
-            );
-            showToast(`Saving ${filename} to Downloads/ShopLog`);
-            return true;
+            return dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+        }
+
+        async function saveExportBlobThroughNativeApp(filename, blob) {
+            const safeFilename = String(filename || 'shoplog-export.bin');
+            const mimeType = String(blob.type || 'application/octet-stream');
+
+            if (window.ShopLogAndroid && typeof window.ShopLogAndroid.saveFile === 'function') {
+                window.ShopLogAndroid.saveFile(safeFilename, mimeType, await encodeExportBlob(blob));
+                showToast(`Saving ${safeFilename} to Downloads/ShopLog`);
+                return true;
+            }
+
+            const iosHandler = window.webkit?.messageHandlers?.shoplog;
+            if (iosHandler && typeof iosHandler.postMessage === 'function') {
+                iosHandler.postMessage({
+                    action:'saveFile',
+                    filename:safeFilename,
+                    mimeType,
+                    base64:await encodeExportBlob(blob)
+                });
+                showToast(`Saving ${safeFilename} to Files/ShopLog`);
+                return true;
+            }
+
+            return false;
         }
 
         async function saveExportBlob(filename, blob) {
             try {
-                if (await saveExportBlobThroughAndroid(filename, blob)) return true;
+                if (await saveExportBlobThroughNativeApp(filename, blob)) return true;
             } catch {
-                showToast('Android save failed; trying a browser download', true);
+                showToast('App save failed; trying a browser download', true);
             }
             if (await canWriteExportDirectory()) {
                 try {
