@@ -29,3 +29,13 @@ Then open the local URL shown in the terminal.
 App data is stored in the browser on the device where it is entered. Export
 regular backups from ShopLog, especially before clearing browser data or moving
 to another device.
+
+## Android app
+
+The `android/` folder contains the offline Android wrapper. It bundles ShopLog
+inside a permanent app installation so refreshes do not depend on temporary
+file-browser access. Android exports are written to `Downloads/ShopLog`, and
+JSON imports use the system file picker.
+
+The build requires Android Platform 36, Build Tools 36.0.0, and Java 17 or
+newer. Run `android/build.ps1` to create `android/build/ShopLog-Android.apk`.
