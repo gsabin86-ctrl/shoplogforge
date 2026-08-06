@@ -37,5 +37,9 @@ inside a permanent app installation so refreshes do not depend on temporary
 file-browser access. Android exports are written to `Downloads/ShopLog`, and
 JSON imports use the system file picker.
 
+The signed Android 1.1 installer is available at
+[`releases/ShopLog-Android-v1.1.apk`](releases/ShopLog-Android-v1.1.apk).
+Install it over an earlier ShopLog APK to retain the app's local data.
+
 The build requires Android Platform 36, Build Tools 36.0.0, and Java 17 or
 newer. Run `android/build.ps1` to create `android/build/ShopLog-Android.apk`.
